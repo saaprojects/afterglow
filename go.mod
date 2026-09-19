@@ -2,7 +2,10 @@ module afterglow
 
 go 1.25.0
 
-require github.com/wailsapp/wails/v2 v2.16.0
+require (
+	github.com/wailsapp/wails/v2 v2.16.0
+	gitlab.com/gomidi/midi/v2 v2.3.24
+)
 
 require (
 	atomicgo.dev/cursor v0.2.0 // indirect
