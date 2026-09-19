@@ -5,3 +5,7 @@
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
 }
+
+export function SaveExportedVideo(arg1, arg2) {
+  return window['go']['main']['App']['SaveExportedVideo'](arg1, arg2);
+}
