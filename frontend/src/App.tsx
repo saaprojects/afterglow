@@ -1,7 +1,7 @@
-import ExportSpike from './ExportSpike';
+import Preview from './Preview';
 
 function App() {
-    return <ExportSpike/>;
+    return <Preview/>;
 }
 
 export default App

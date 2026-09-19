@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "midiFile": "grand-piano.mid",
+  "scrollSpeed": 250,
+  "resolution": {
+    "width": 1024,
+    "height": 576
+  },
+  "fps": 60
+}
