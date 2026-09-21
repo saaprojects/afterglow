@@ -58,6 +58,34 @@ func (a *App) OpenProject(path string) (ProjectInfo, error) {
 	}, nil
 }
 
+// OpenProjectResult carries a picked project's path alongside its info, so
+// the frontend can tell "user cancelled" (empty Path) apart from a
+// legitimately loaded project.
+type OpenProjectResult struct {
+	Path string      `json:"path"`
+	Info ProjectInfo `json:"info"`
+}
+
+// OpenProjectDialog prompts the user to pick a project file and opens it.
+// Returns a zero-value result (empty Path, no error) if the user cancels.
+func (a *App) OpenProjectDialog() (OpenProjectResult, error) {
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Open project",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Afterglow Project (*.afterglow.json)", Pattern: "*.afterglow.json"},
+		},
+	})
+	if err != nil || path == "" {
+		return OpenProjectResult{}, err
+	}
+
+	info, err := a.OpenProject(path)
+	if err != nil {
+		return OpenProjectResult{}, err
+	}
+	return OpenProjectResult{Path: path, Info: info}, nil
+}
+
 // AudioBytes returns the raw bytes of the current project's audio file
 // (always WAV). Errors if no project is open or it has no audio file.
 func (a *App) AudioBytes() ([]byte, error) {

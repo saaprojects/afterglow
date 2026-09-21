@@ -14,6 +14,10 @@ export function OpenProject(arg1) {
   return window['go']['main']['App']['OpenProject'](arg1);
 }
 
+export function OpenProjectDialog() {
+  return window['go']['main']['App']['OpenProjectDialog']();
+}
+
 export function SaveVideoAs(arg1, arg2) {
   return window['go']['main']['App']['SaveVideoAs'](arg1, arg2);
 }

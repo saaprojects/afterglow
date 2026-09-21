@@ -9,4 +9,6 @@ export function DrawListAt(arg1:number):Promise<Array<drawlist.Instance>>;
 
 export function OpenProject(arg1:string):Promise<main.ProjectInfo>;
 
+export function OpenProjectDialog():Promise<main.OpenProjectResult>;
+
 export function SaveVideoAs(arg1:Array<number>,arg2:string):Promise<string>;

@@ -1,14 +1,19 @@
 import {type ChangeEvent, useEffect, useRef, useState} from 'react';
-import {AudioBytes, DrawListAt, OpenProject} from '../wailsjs/go/main/App';
+import {AudioBytes, DrawListAt, OpenProject, OpenProjectDialog} from '../wailsjs/go/main/App';
 import {Scene} from './scene';
 import ExportButton from './ExportButton';
 import {decodeWailsBytes} from './wailsBytes';
 
-const PROJECT_PATH = 'testdata/chiodos.afterglow.json';
+const DEFAULT_PROJECT_PATH = 'testdata/chiodos.afterglow.json';
+
+function basename(path: string): string {
+    return path.split(/[/\\]/).pop() ?? path;
+}
 
 export default function Preview() {
     const hostRef = useRef<HTMLDivElement>(null);
     const audioRef = useRef<HTMLAudioElement>(null);
+    const [projectPath, setProjectPath] = useState(DEFAULT_PROJECT_PATH);
     const [status, setStatus] = useState('loading project…');
     const [playing, setPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
@@ -31,8 +36,15 @@ export default function Preview() {
         let cleanup = () => {
         };
 
+        playingRef.current = false;
+        timeRef.current = 0;
+        hasAudioRef.current = false;
+        setPlaying(false);
+        setDisplayTime(0);
+        setStatus('loading project…');
+
         (async () => {
-            const info = await OpenProject(PROJECT_PATH);
+            const info = await OpenProject(projectPath);
             if (cancelled) return;
             durationRef.current = info.durationSeconds;
             setDuration(info.durationSeconds);
@@ -45,6 +57,8 @@ export default function Preview() {
                 audioRef.current.src = audioURL;
                 hasAudioRef.current = true;
                 audioStatus = `audio: ${bytes.length.toLocaleString()} bytes`;
+            } else if (audioRef.current) {
+                audioRef.current.removeAttribute('src');
             }
 
             scene = await Scene.create({width: info.width, height: info.height}, hostRef.current);
@@ -105,7 +119,7 @@ export default function Preview() {
             cancelled = true;
             cleanup();
         };
-    }, []);
+    }, [projectPath]);
 
     function togglePlay() {
         const next = !playingRef.current;
@@ -148,8 +162,19 @@ export default function Preview() {
         if (audioRef.current) audioRef.current.currentTime = t;
     }
 
+    async function openProjectDialog() {
+        const result = await OpenProjectDialog();
+        if (result.path) {
+            setProjectPath(result.path);
+        }
+    }
+
     return (
         <div style={{padding: 16, fontFamily: 'monospace', color: '#eee', background: '#181820', height: '100vh'}}>
+            <div style={{marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12}}>
+                <button onClick={() => void openProjectDialog()}>Open Project…</button>
+                <span>{basename(projectPath)}</span>
+            </div>
             <div ref={hostRef} style={{display: 'inline-block', border: '1px solid #333'}}/>
             <audio ref={audioRef} onError={onAudioError}/>
             <div style={{marginTop: 12, display: 'flex', alignItems: 'center', gap: 12}}>
@@ -164,7 +189,7 @@ export default function Preview() {
                     style={{width: 400}}
                 />
                 <span>{displayTime.toFixed(2)}s / {duration.toFixed(2)}s</span>
-                <ExportButton projectPath={PROJECT_PATH}/>
+                <ExportButton projectPath={projectPath}/>
                 <span>{status}</span>
             </div>
         </div>
