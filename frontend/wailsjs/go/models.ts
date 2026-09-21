@@ -6,6 +6,8 @@ export namespace drawlist {
 	    W: number;
 	    H: number;
 	    Color: string;
+	    GlowColor: string;
+	    GlowEnabled: boolean;
 	    Glow: number;
 	    Pitch: number;
 	
@@ -20,6 +22,8 @@ export namespace drawlist {
 	        this.W = source["W"];
 	        this.H = source["H"];
 	        this.Color = source["Color"];
+	        this.GlowColor = source["GlowColor"];
+	        this.GlowEnabled = source["GlowEnabled"];
 	        this.Glow = source["Glow"];
 	        this.Pitch = source["Pitch"];
 	    }
@@ -108,6 +112,29 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	
+	export class TrackInfo {
+	    track: number;
+	    noteCount: number;
+	    color: string;
+	    glowColor: string;
+	    glowDisabled: boolean;
+	    hidden: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new TrackInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.track = source["track"];
+	        this.noteCount = source["noteCount"];
+	        this.color = source["color"];
+	        this.glowColor = source["glowColor"];
+	        this.glowDisabled = source["glowDisabled"];
+	        this.hidden = source["hidden"];
+	    }
 	}
 
 }

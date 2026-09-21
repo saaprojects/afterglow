@@ -20,3 +20,7 @@ export function PickAudioFile():Promise<string>;
 export function PickMIDIFile():Promise<string>;
 
 export function SaveVideoAs(arg1:Array<number>,arg2:string):Promise<string>;
+
+export function SetTrackSettings(arg1:number,arg2:string,arg3:string,arg4:boolean,arg5:boolean):Promise<void>;
+
+export function TrackList():Promise<Array<main.TrackInfo>>;

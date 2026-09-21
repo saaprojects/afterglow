@@ -160,13 +160,15 @@ func bruteForceDrawList(tl *timeline.Timeline, t, width, height float64) []Insta
 		h := n.Duration * scrollSpeed
 
 		instances = append(instances, Instance{
-			X:     key.X,
-			Y:     yBottom - h,
-			W:     key.W,
-			H:     h,
-			Color: settings.Color,
-			Glow:  float64(n.Velocity) / 127,
-			Pitch: n.Pitch,
+			X:           key.X,
+			Y:           yBottom - h,
+			W:           key.W,
+			H:           h,
+			Color:       settings.Color,
+			GlowColor:   settings.GlowColor,
+			GlowEnabled: !settings.GlowDisabled,
+			Glow:        float64(n.Velocity) / 127,
+			Pitch:       n.Pitch,
 		})
 	}
 	return instances

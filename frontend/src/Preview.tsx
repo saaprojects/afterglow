@@ -3,6 +3,7 @@ import {AudioBytes, DrawListAt, KeyboardAt, OpenProject, OpenProjectDialog} from
 import {KEY_FADE_SECONDS, Scene} from './scene';
 import ExportButton from './ExportButton';
 import NewProjectDialog from './NewProjectDialog';
+import TrackPanel from './TrackPanel';
 import {decodeWailsBytes} from './wailsBytes';
 
 const DEFAULT_PROJECT_PATH = 'testdata/chiodos.afterglow.json';
@@ -23,6 +24,7 @@ export default function Preview() {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [projectPath, setProjectPath] = useState(DEFAULT_PROJECT_PATH);
     const [showNewProject, setShowNewProject] = useState(false);
+    const [showTracks, setShowTracks] = useState(false);
     const [status, setStatus] = useState('loading project…');
     const [playing, setPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
@@ -237,6 +239,7 @@ export default function Preview() {
             <div style={{marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flex: '0 0 auto'}}>
                 <button onClick={() => setShowNewProject(true)}>New Project…</button>
                 <button onClick={() => void openProjectDialog()}>Open Project…</button>
+                <button onClick={() => setShowTracks(true)}>Tracks…</button>
                 <span>{basename(projectPath)}</span>
             </div>
             {showNewProject && (
@@ -248,6 +251,7 @@ export default function Preview() {
                     }}
                 />
             )}
+            {showTracks && <TrackPanel onClose={() => setShowTracks(false)}/>}
             <div
                 ref={hostRef}
                 style={{

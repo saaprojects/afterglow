@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -176,6 +177,75 @@ func (a *App) DrawListAt(t float64, width, height int) ([]drawlist.Instance, err
 // KeyboardAt returns the piano key layout for the given width.
 func (a *App) KeyboardAt(width int) []drawlist.KeyRect {
 	return drawlist.Keyboard(float64(width))
+}
+
+// TrackInfo is one MIDI track's current color/visibility settings, along
+// with how many notes it actually has (so the UI can skip empty tracks).
+type TrackInfo struct {
+	Track        int    `json:"track"`
+	NoteCount    int    `json:"noteCount"`
+	Color        string `json:"color"`
+	GlowColor    string `json:"glowColor"`
+	GlowDisabled bool   `json:"glowDisabled"`
+	Hidden       bool   `json:"hidden"`
+}
+
+// TrackList returns info for every track that has at least one note in
+// the currently open project, sorted by track index.
+func (a *App) TrackList() ([]TrackInfo, error) {
+	if a.timeline == nil {
+		return nil, fmt.Errorf("no project open")
+	}
+
+	counts := map[int]int{}
+	for _, n := range a.timeline.Notes {
+		counts[n.Track]++
+	}
+
+	tracks := make([]int, 0, len(counts))
+	for t := range counts {
+		tracks = append(tracks, t)
+	}
+	sort.Ints(tracks)
+
+	infos := make([]TrackInfo, 0, len(tracks))
+	for _, t := range tracks {
+		settings := a.timeline.Project.TrackSettingsFor(t)
+		infos = append(infos, TrackInfo{
+			Track:        t,
+			NoteCount:    counts[t],
+			Color:        settings.Color,
+			GlowColor:    settings.GlowColor,
+			GlowDisabled: settings.GlowDisabled,
+			Hidden:       settings.Hidden,
+		})
+	}
+	return infos, nil
+}
+
+// SetTrackSettings updates a track's color/glow/visibility and persists
+// the change to the project file immediately (the in-memory project is
+// the same one DrawListAt reads, so the change takes effect on the very
+// next frame — no need to reopen the project).
+func (a *App) SetTrackSettings(track int, color, glowColor string, glowDisabled, hidden bool) error {
+	if a.timeline == nil {
+		return fmt.Errorf("no project open")
+	}
+
+	p := a.timeline.Project
+	for i, ts := range p.Tracks {
+		if ts.Track == track {
+			p.Tracks[i].Color = color
+			p.Tracks[i].GlowColor = glowColor
+			p.Tracks[i].GlowDisabled = glowDisabled
+			p.Tracks[i].Hidden = hidden
+			return project.Save(a.projectFilePath, p)
+		}
+	}
+	p.Tracks = append(p.Tracks, project.TrackSettings{
+		Track: track, Color: color, GlowColor: glowColor, GlowDisabled: glowDisabled, Hidden: hidden,
+	})
+	return project.Save(a.projectFilePath, p)
 }
 
 // SaveVideoAs prompts the user for a destination and writes the exported

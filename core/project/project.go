@@ -36,9 +36,18 @@ type Project struct {
 
 // TrackSettings overrides rendering for a single MIDI track.
 type TrackSettings struct {
-	Track  int    `json:"track"`
-	Color  string `json:"color"` // hex, e.g. "#3399ff"
-	Hidden bool   `json:"hidden,omitempty"`
+	Track int    `json:"track"`
+	Color string `json:"color"` // hex, e.g. "#3399ff" — the note/key fill
+
+	// GlowColor is the note's glow/halo color, independent of Color. If
+	// empty, TrackSettingsFor defaults it to match Color.
+	GlowColor string `json:"glowColor,omitempty"`
+
+	// GlowDisabled turns off the glow/halo entirely for this track. An
+	// opt-out (default false = glow on) so existing tracks keep glowing.
+	GlowDisabled bool `json:"glowDisabled,omitempty"`
+
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 // defaultColors cycles for tracks with no explicit TrackSettings entry, so
@@ -67,13 +76,19 @@ func New(midiFile string) *Project {
 
 // TrackSettingsFor returns the settings for the given track index, falling
 // back to a default color and visible=true if there's no explicit entry.
+// GlowColor defaults to Color whenever it isn't explicitly set, so a
+// track's glow matches its key color until deliberately overridden.
 func (p *Project) TrackSettingsFor(track int) TrackSettings {
 	for _, ts := range p.Tracks {
 		if ts.Track == track {
+			if ts.GlowColor == "" {
+				ts.GlowColor = ts.Color
+			}
 			return ts
 		}
 	}
-	return TrackSettings{Track: track, Color: DefaultColorForTrack(track)}
+	color := DefaultColorForTrack(track)
+	return TrackSettings{Track: track, Color: color, GlowColor: color}
 }
 
 // ResolveMIDIPath returns MIDIFile resolved relative to the project file's

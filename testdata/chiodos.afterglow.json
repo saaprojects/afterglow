@@ -1,5 +1,11 @@
 {
   "version": 1,
   "midiFile": "chiodos.mid",
-  "audioFile": "chiodos.wav"
+  "audioFile": "chiodos.wav",
+  "tracks": [
+    {
+      "track": 2,
+      "color": "#c0750c"
+    }
+  ]
 }

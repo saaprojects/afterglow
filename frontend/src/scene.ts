@@ -1,5 +1,4 @@
-import {Application, Container, Graphics, NineSliceSprite, Rectangle, Sprite, Texture} from 'pixi.js';
-import {AdvancedBloomFilter} from 'pixi-filters';
+import {Application, BlurFilter, Container, Graphics, NineSliceSprite, Rectangle, Sprite, Texture} from 'pixi.js';
 import {drawlist} from '../wailsjs/go/models';
 
 // Must match core/drawlist.HitLineFraction.
@@ -35,6 +34,14 @@ const ACCENT_HEIGHT_FRACTION = 0.08; // fraction of the white-key strip height
 // real rounded-corner UI element would.
 const NOTE_CORNER_RADIUS = 5;
 
+// The note glow is a separate, larger, blurred copy of the note shape
+// behind the crisp one, tinted with its own independent color — not
+// bloom-extracted brightness, since that can't be given an explicit output
+// color (it just amplifies whatever color is already there).
+const GLOW_PADDING = 10; // px each side, how much bigger the glow is than the note
+const GLOW_BLUR_STRENGTH = 12;
+const GLOW_ALPHA = 0.8;
+
 interface KeyVisual {
     shade: Graphics; // neutral "pressed" darkening/lightening
     accent: Sprite; // thin track-colored strip at the hit-line edge
@@ -60,7 +67,9 @@ function bottomRoundedRect(g: Graphics, x: number, y: number, w: number, h: numb
 export class Scene {
     readonly app: Application;
     private readonly pool: NineSliceSprite[] = [];
+    private readonly glowPool: NineSliceSprite[] = [];
     private readonly noteContainer: Container;
+    private readonly glowContainer: Container;
     private readonly noteTexture: Texture;
     private readonly keyVisuals: Map<number, KeyVisual>;
     private readonly keyLastActiveT = new Map<number, number>();
@@ -70,12 +79,14 @@ export class Scene {
     private constructor(
         app: Application,
         noteContainer: Container,
+        glowContainer: Container,
         noteTexture: Texture,
         keyVisuals: Map<number, KeyVisual>,
         hitLineY: number,
     ) {
         this.app = app;
         this.noteContainer = noteContainer;
+        this.glowContainer = glowContainer;
         this.noteTexture = noteTexture;
         this.keyVisuals = keyVisuals;
         this.hitLineY = hitLineY;
@@ -92,15 +103,16 @@ export class Scene {
             // (from Preview's async per-tick update, or export's frame
             // loop). Without this, PixiJS's own automatic per-tick render
             // races against those explicit calls — with a multi-pass
-            // filter like bloom in between, that race caused the glow to
+            // filter like blur in between, that race caused the glow to
             // intermittently glitch/disappear on some frames.
             autoStart: false,
         });
         app.ticker.start(); // still drive Preview's own per-tick callback
         host?.appendChild(app.canvas);
 
-        // A small rounded-rect texture, nine-sliced per note so the corner
-        // radius stays fixed regardless of how wide/tall a given note is.
+        // A small rounded-rect texture, nine-sliced per note (and its glow)
+        // so the corner radius stays fixed regardless of how wide/tall a
+        // given note is.
         const noteShape = new Graphics()
             .roundRect(0, 0, NOTE_CORNER_RADIUS * 2 + 2, NOTE_CORNER_RADIUS * 2 + 2, NOTE_CORNER_RADIUS)
             .fill(0xffffff);
@@ -171,7 +183,7 @@ export class Scene {
         // No filters on the key shade/accent layers — glow there was a
         // persistent source of flicker even after isolating it from the
         // keyboard and pinning filterArea. Keys just show flat shade +
-        // accent color; falling notes still glow via noteContainer below.
+        // accent color; falling notes still glow via glowContainer below.
         app.stage.addChild(whiteBase, whiteShadeLayer, whiteAccentLayer, blackBase, blackShadeLayer, blackAccentLayer);
 
         const hitLine = new Graphics()
@@ -179,22 +191,26 @@ export class Scene {
             .fill(0x666666);
         app.stage.addChild(hitLine);
 
+        // glowContainer renders behind noteContainer: a larger, blurred,
+        // independently-colored copy of each note. Isolated in its own
+        // container (not sharing bounds with the keyboard) with a fixed
+        // filterArea, for the same reasons as the old bloom setup — an
+        // auto-computed, constantly-shifting bounds region made a
+        // multi-pass filter render inconsistently frame to frame.
+        const glowContainer = new Container();
+        glowContainer.filters = [new BlurFilter({strength: GLOW_BLUR_STRENGTH, quality: 4})];
+        glowContainer.filterArea = new Rectangle(
+            -GLOW_PADDING,
+            -GLOW_PADDING,
+            size.width + GLOW_PADDING * 2,
+            hitLineY + GLOW_PADDING,
+        );
+        app.stage.addChild(glowContainer);
+
         const noteContainer = new Container();
-        // Applied only to the note layer, isolated from the keyboard
-        // entirely — track colors (e.g. green) can have lower luminance
-        // than the plain white keys, so a single scene-wide threshold can't
-        // exclude the keyboard without also excluding the notes. Keeping
-        // bloom scoped to notes-only means threshold only has to account
-        // for note colors, and the keyboard is never a factor.
-        noteContainer.filters = [
-            new AdvancedBloomFilter({threshold: 0.3, bloomScale: 1.2, brightness: 1.0, blur: 6, quality: 4}),
-        ];
-        // Fixed instead of PixiJS's auto-computed bounds, which shift as
-        // notes appear/disappear — a moving target for a multi-pass filter.
-        noteContainer.filterArea = new Rectangle(0, 0, size.width, hitLineY);
         app.stage.addChild(noteContainer);
 
-        return new Scene(app, noteContainer, noteTexture, keyVisuals, hitLineY);
+        return new Scene(app, noteContainer, glowContainer, noteTexture, keyVisuals, hitLineY);
     }
 
     /**
@@ -205,6 +221,7 @@ export class Scene {
         this.ensurePoolSize(instances.length);
         instances.forEach((inst, i) => {
             const s = this.pool[i];
+            const glow = this.glowPool[i];
             const tint = hexToTint(inst.Color);
 
             // A note is actively sounding exactly when its (unclipped)
@@ -217,19 +234,40 @@ export class Scene {
             const clippedHeight = Math.max(Math.min(inst.Y + inst.H, this.hitLineY) - inst.Y, 0);
             if (clippedHeight <= 0) {
                 s.visible = false;
+                glow.visible = false;
                 return;
             }
 
+            const w = Math.max(inst.W - 1, 1); // hairline gap between keys
             s.visible = true;
             s.x = inst.X;
             s.y = inst.Y;
-            s.width = Math.max(inst.W - 1, 1); // hairline gap between keys
+            s.width = w;
             s.height = clippedHeight;
             s.tint = tint;
             s.alpha = 0.55 + 0.45 * inst.Glow;
+
+            if (!inst.GlowEnabled) {
+                glow.visible = false;
+                return;
+            }
+            const glowBottom = Math.min(inst.Y + inst.H + GLOW_PADDING, this.hitLineY);
+            const glowHeight = Math.max(glowBottom - (inst.Y - GLOW_PADDING), 0);
+            if (glowHeight <= 0) {
+                glow.visible = false;
+                return;
+            }
+            glow.visible = true;
+            glow.x = inst.X - GLOW_PADDING;
+            glow.y = inst.Y - GLOW_PADDING;
+            glow.width = w + GLOW_PADDING * 2;
+            glow.height = glowHeight;
+            glow.tint = hexToTint(inst.GlowColor || inst.Color);
+            glow.alpha = GLOW_ALPHA * (0.5 + 0.5 * inst.Glow);
         });
         for (let i = instances.length; i < this.pool.length; i++) {
             this.pool[i].visible = false;
+            this.glowPool[i].visible = false;
         }
 
         // Key press visuals: full brightness while a note is active, fading
@@ -297,6 +335,19 @@ export class Scene {
             s.visible = false;
             this.noteContainer.addChild(s);
             this.pool.push(s);
+
+            const glow = new NineSliceSprite({
+                texture: this.noteTexture,
+                leftWidth: NOTE_CORNER_RADIUS,
+                rightWidth: NOTE_CORNER_RADIUS,
+                topHeight: NOTE_CORNER_RADIUS,
+                bottomHeight: NOTE_CORNER_RADIUS,
+                width: 1,
+                height: 1,
+            });
+            glow.visible = false;
+            this.glowContainer.addChild(glow);
+            this.glowPool.push(glow);
         }
     }
 }

@@ -37,3 +37,11 @@ export function PickMIDIFile() {
 export function SaveVideoAs(arg1, arg2) {
   return window['go']['main']['App']['SaveVideoAs'](arg1, arg2);
 }
+
+export function SetTrackSettings(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SetTrackSettings'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function TrackList() {
+  return window['go']['main']['App']['TrackList']();
+}

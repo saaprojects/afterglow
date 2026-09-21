@@ -12,10 +12,12 @@ import (
 // Instance is one rectangle to render, in pixel space at the requested
 // width/height.
 type Instance struct {
-	X, Y, W, H float64
-	Color      string  // hex, from the note's track settings
-	Glow       float64 // 0..1, derived from note velocity
-	Pitch      uint8   // which key this note is on, for renderers that highlight keys
+	X, Y, W, H  float64
+	Color       string  // hex, from the note's track settings — the note/key fill
+	GlowColor   string  // hex, independent of Color — the note's glow/halo
+	GlowEnabled bool    // whether the renderer should draw the glow at all
+	Glow        float64 // 0..1, derived from note velocity
+	Pitch       uint8   // which key this note is on, for renderers that highlight keys
 }
 
 // HitLineFraction is where the hit line sits, as a fraction of frame
@@ -82,13 +84,15 @@ func DrawList(tl *timeline.Timeline, t float64, width, height float64) []Instanc
 		h := n.Duration * scrollSpeed
 
 		instances = append(instances, Instance{
-			X:     key.X,
-			Y:     yBottom - h,
-			W:     key.W,
-			H:     h,
-			Color: settings.Color,
-			Glow:  float64(n.Velocity) / 127,
-			Pitch: n.Pitch,
+			X:           key.X,
+			Y:           yBottom - h,
+			W:           key.W,
+			H:           h,
+			Color:       settings.Color,
+			GlowColor:   settings.GlowColor,
+			GlowEnabled: !settings.GlowDisabled,
+			Glow:        float64(n.Velocity) / 127,
+			Pitch:       n.Pitch,
 		})
 	}
 
