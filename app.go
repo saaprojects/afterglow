@@ -8,6 +8,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"afterglow/core/drawlist"
+	"afterglow/core/project"
 	"afterglow/core/timeline"
 )
 
