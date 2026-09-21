@@ -233,18 +233,23 @@ func (a *App) SetTrackSettings(track int, color, glowColor string, glowDisabled,
 	}
 
 	p := a.timeline.Project
+	found := false
 	for i, ts := range p.Tracks {
 		if ts.Track == track {
 			p.Tracks[i].Color = color
 			p.Tracks[i].GlowColor = glowColor
 			p.Tracks[i].GlowDisabled = glowDisabled
 			p.Tracks[i].Hidden = hidden
-			return project.Save(a.projectFilePath, p)
+			found = true
+			break
 		}
 	}
-	p.Tracks = append(p.Tracks, project.TrackSettings{
-		Track: track, Color: color, GlowColor: glowColor, GlowDisabled: glowDisabled, Hidden: hidden,
-	})
+	if !found {
+		p.Tracks = append(p.Tracks, project.TrackSettings{
+			Track: track, Color: color, GlowColor: glowColor, GlowDisabled: glowDisabled, Hidden: hidden,
+		})
+	}
+
 	return project.Save(a.projectFilePath, p)
 }
 
