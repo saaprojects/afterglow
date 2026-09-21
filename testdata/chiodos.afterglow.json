@@ -5,8 +5,9 @@
   "tracks": [
     {
       "track": 2,
-      "color": "#ffffff",
-      "glowColor": "#b70606"
+      "color": "#ffff00",
+      "glowColor": "#fcfcfc",
+      "glowDisabled": true
     }
   ]
 }

@@ -239,7 +239,7 @@ export default function Preview() {
             <div style={{marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flex: '0 0 auto'}}>
                 <button onClick={() => setShowNewProject(true)}>New Project…</button>
                 <button onClick={() => void openProjectDialog()}>Open Project…</button>
-                <button onClick={() => setShowTracks(true)}>Tracks…</button>
+                <button onClick={() => setShowTracks(true)}>Track Panel...</button>
                 <span>{basename(projectPath)}</span>
             </div>
             {showNewProject && (
