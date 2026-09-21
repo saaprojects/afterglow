@@ -1,10 +1,18 @@
 import {type ChangeEvent, useEffect, useRef, useState} from 'react';
-import {AudioBytes, DrawListAt, OpenProject, OpenProjectDialog} from '../wailsjs/go/main/App';
+import {AudioBytes, DrawListAt, KeyboardAt, OpenProject, OpenProjectDialog} from '../wailsjs/go/main/App';
 import {KEY_FADE_SECONDS, Scene} from './scene';
 import ExportButton from './ExportButton';
+import NewProjectDialog from './NewProjectDialog';
 import {decodeWailsBytes} from './wailsBytes';
 
 const DEFAULT_PROJECT_PATH = 'testdata/chiodos.afterglow.json';
+
+// The live preview always renders internally at this fixed size and
+// scales to fit the window on screen (see the canvas style below) —
+// resolution isn't a project property, and picking one only matters for
+// export, where the user chooses it per render.
+const PREVIEW_WIDTH = 1920;
+const PREVIEW_HEIGHT = 1080;
 
 function basename(path: string): string {
     return path.split(/[/\\]/).pop() ?? path;
@@ -14,6 +22,7 @@ export default function Preview() {
     const hostRef = useRef<HTMLDivElement>(null);
     const audioRef = useRef<HTMLAudioElement>(null);
     const [projectPath, setProjectPath] = useState(DEFAULT_PROJECT_PATH);
+    const [showNewProject, setShowNewProject] = useState(false);
     const [status, setStatus] = useState('loading project…');
     const [playing, setPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
@@ -62,8 +71,9 @@ export default function Preview() {
                 audioRef.current.removeAttribute('src');
             }
 
+            const keyboard = await KeyboardAt(PREVIEW_WIDTH);
             scene = await Scene.create(
-                {width: info.width, height: info.height, keyboard: info.keyboard},
+                {width: PREVIEW_WIDTH, height: PREVIEW_HEIGHT, keyboard},
                 hostRef.current,
             );
             if (cancelled) {
@@ -71,6 +81,19 @@ export default function Preview() {
                 return;
             }
             sceneRef.current = scene;
+
+            // The canvas always renders internally at PREVIEW_WIDTH x
+            // PREVIEW_HEIGHT — only its on-screen display size scales to
+            // fill the window, aspect ratio preserved (letterboxed via
+            // object-fit, same idea as a <video> element). Export renders
+            // at whatever resolution the user picks separately.
+            // width/height auto only ever shrinks a canvas, never grows it
+            // past its native pixel size, so 100%+object-fit is needed to
+            // scale up to fill a larger window too.
+            scene.app.canvas.style.width = '100%';
+            scene.app.canvas.style.height = '100%';
+            scene.app.canvas.style.objectFit = 'contain';
+            scene.app.canvas.style.display = 'block';
 
             // How much real time to keep advancing past the nominal end
             // before actually stopping playback, so the last note(s) —
@@ -108,7 +131,7 @@ export default function Preview() {
                 if (!inFlight) {
                     inFlight = true;
                     const sampledT = timeRef.current;
-                    DrawListAt(sampledT)
+                    DrawListAt(sampledT, PREVIEW_WIDTH, PREVIEW_HEIGHT)
                         .then((instances) => {
                             scene?.update(instances, sampledT);
                             scene?.renderFrame();
@@ -132,6 +155,10 @@ export default function Preview() {
                 scene?.app.ticker.remove(tick);
                 scene?.destroy();
                 sceneRef.current = null;
+                // Revoking the blob URL doesn't stop already-buffered
+                // audio from continuing to play — without this, switching
+                // projects mid-playback left the old song's audio running.
+                audioRef.current?.pause();
                 if (audioURL) URL.revokeObjectURL(audioURL);
             };
         })().catch((e) => {
@@ -197,14 +224,44 @@ export default function Preview() {
     }
 
     return (
-        <div style={{padding: 16, fontFamily: 'monospace', color: '#eee', background: '#181820', height: '100vh'}}>
-            <div style={{marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12}}>
+        <div style={{
+            boxSizing: 'border-box',
+            padding: 16,
+            fontFamily: 'monospace',
+            color: '#eee',
+            background: '#181820',
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+        }}>
+            <div style={{marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flex: '0 0 auto'}}>
+                <button onClick={() => setShowNewProject(true)}>New Project…</button>
                 <button onClick={() => void openProjectDialog()}>Open Project…</button>
                 <span>{basename(projectPath)}</span>
             </div>
-            <div ref={hostRef} style={{display: 'inline-block', border: '1px solid #333'}}/>
+            {showNewProject && (
+                <NewProjectDialog
+                    onClose={() => setShowNewProject(false)}
+                    onCreated={(path) => {
+                        setShowNewProject(false);
+                        setProjectPath(path);
+                    }}
+                />
+            )}
+            <div
+                ref={hostRef}
+                style={{
+                    flex: '1 1 auto',
+                    minHeight: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    border: '1px solid #333',
+                }}
+            />
             <audio ref={audioRef} onError={onAudioError}/>
-            <div style={{marginTop: 12, display: 'flex', alignItems: 'center', gap: 12}}>
+            <div style={{marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, flex: '0 0 auto'}}>
                 <button onClick={togglePlay}>{playing ? 'Pause' : 'Play'}</button>
                 <input
                     type="range"

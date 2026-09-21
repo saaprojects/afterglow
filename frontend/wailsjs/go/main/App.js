@@ -6,8 +6,16 @@ export function AudioBytes() {
   return window['go']['main']['App']['AudioBytes']();
 }
 
-export function DrawListAt(arg1) {
-  return window['go']['main']['App']['DrawListAt'](arg1);
+export function CreateProject(arg1) {
+  return window['go']['main']['App']['CreateProject'](arg1);
+}
+
+export function DrawListAt(arg1, arg2, arg3) {
+  return window['go']['main']['App']['DrawListAt'](arg1, arg2, arg3);
+}
+
+export function KeyboardAt(arg1) {
+  return window['go']['main']['App']['KeyboardAt'](arg1);
 }
 
 export function OpenProject(arg1) {
@@ -16,6 +24,14 @@ export function OpenProject(arg1) {
 
 export function OpenProjectDialog() {
   return window['go']['main']['App']['OpenProjectDialog']();
+}
+
+export function PickAudioFile() {
+  return window['go']['main']['App']['PickAudioFile']();
+}
+
+export function PickMIDIFile() {
+  return window['go']['main']['App']['PickMIDIFile']();
 }
 
 export function SaveVideoAs(arg1, arg2) {

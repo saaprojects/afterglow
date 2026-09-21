@@ -16,15 +16,6 @@ func TestNew_Defaults(t *testing.T) {
 	if p.MIDIFile != "song.mid" {
 		t.Errorf("MIDIFile = %q, want %q", p.MIDIFile, "song.mid")
 	}
-	if p.FPS <= 0 {
-		t.Errorf("FPS = %d, want > 0", p.FPS)
-	}
-	if p.ScrollSpeed <= 0 {
-		t.Errorf("ScrollSpeed = %v, want > 0", p.ScrollSpeed)
-	}
-	if p.Resolution.Width <= 0 || p.Resolution.Height <= 0 {
-		t.Errorf("Resolution = %+v, want positive width and height", p.Resolution)
-	}
 }
 
 func TestSaveLoad_RoundTrip(t *testing.T) {

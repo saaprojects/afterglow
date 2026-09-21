@@ -9,8 +9,8 @@ import (
 	"afterglow/core/timeline"
 )
 
-// Instance is one rectangle to render, in pixel space at the project's
-// configured resolution.
+// Instance is one rectangle to render, in pixel space at the requested
+// width/height.
 type Instance struct {
 	X, Y, W, H float64
 	Color      string  // hex, from the note's track settings
@@ -23,8 +23,17 @@ type Instance struct {
 // exactly at its start time and finishes crossing it at start+duration.
 const HitLineFraction = 0.85
 
+// LookaheadSeconds is how long a note takes to fall from the top of the
+// frame to the hit line. This is the only thing that determines fall
+// speed — there's no separate user-configurable scroll speed, since
+// resolution (and therefore pixels-per-second) is chosen per render, not
+// stored on the project. Expressing speed as a lookahead time rather than
+// a pixel rate keeps the note timing feel identical across resolutions.
+const LookaheadSeconds = 3.0
+
 // DrawList returns the instances visible at time t (seconds) for every
-// unhidden note whose falling rectangle overlaps the frame.
+// unhidden note whose falling rectangle overlaps a frame of the given
+// width/height.
 //
 // tl.Notes must be sorted by Start ascending (midi.Load guarantees this).
 // Two binary searches bound the candidate range so no per-frame work
@@ -33,17 +42,17 @@ const HitLineFraction = 0.85
 // missed. A song with one pathologically long note alongside many short
 // ones would widen that window more than necessary; an interval tree
 // would fix that, but isn't warranted for typical piano MIDI.
-func DrawList(tl *timeline.Timeline, t float64) []Instance {
+func DrawList(tl *timeline.Timeline, t float64, width, height float64) []Instance {
 	p := tl.Project
 	notes := tl.Notes
-	if len(notes) == 0 || p.ScrollSpeed <= 0 {
+	if len(notes) == 0 {
 		return nil
 	}
 
-	height := float64(p.Resolution.Height)
 	hitLineY := height * HitLineFraction
-	lookaheadUp := hitLineY / p.ScrollSpeed
-	trailingWindow := (height - hitLineY) / p.ScrollSpeed
+	scrollSpeed := hitLineY / LookaheadSeconds
+	lookaheadUp := LookaheadSeconds
+	trailingWindow := (height - hitLineY) / scrollSpeed
 
 	upperBoundStart := t + lookaheadUp
 	lowerBoundStart := t - trailingWindow - tl.MaxNoteDuration()
@@ -55,7 +64,7 @@ func DrawList(tl *timeline.Timeline, t float64) []Instance {
 		return notes[i].Start > upperBoundStart
 	})
 
-	keyboard := Keyboard(float64(p.Resolution.Width))
+	keyboard := Keyboard(width)
 
 	var instances []Instance
 	for _, n := range notes[lo:hi] {
@@ -69,8 +78,8 @@ func DrawList(tl *timeline.Timeline, t float64) []Instance {
 		}
 
 		key := keyRectForPitch(keyboard, n.Pitch)
-		yBottom := hitLineY + (t-n.Start)*p.ScrollSpeed
-		h := n.Duration * p.ScrollSpeed
+		yBottom := hitLineY + (t-n.Start)*scrollSpeed
+		h := n.Duration * scrollSpeed
 
 		instances = append(instances, Instance{
 			X:     key.X,

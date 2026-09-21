@@ -1,11 +1,5 @@
 {
   "version": 1,
   "midiFile": "chiodos.mid",
-  "audioFile": "chiodos.wav",
-  "scrollSpeed": 250,
-  "resolution": {
-    "width": 1024,
-    "height": 576
-  },
-  "fps": 60
+  "audioFile": "chiodos.wav"
 }

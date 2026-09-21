@@ -11,9 +11,10 @@ import {
     Quality,
     WAVE,
 } from 'mediabunny';
-import {AudioBytes, DrawListAt, OpenProject, SaveVideoAs} from '../wailsjs/go/main/App';
+import {AudioBytes, DrawListAt, KeyboardAt, OpenProject, SaveVideoAs} from '../wailsjs/go/main/App';
 import {Scene} from './scene';
 import {decodeWailsBytes} from './wailsBytes';
+import {RESOLUTIONS} from './resolutions';
 
 interface Props {
     projectPath: string;
@@ -22,12 +23,17 @@ interface Props {
 // Renders the whole song frame-by-frame, off the live preview's timeline
 // entirely: time always advances as frame/fps (never the wall clock), so
 // the export is deterministic and reproducible. It shares Scene with
-// Preview, so a given instance list draws identically in both.
+// Preview, so a given instance list draws identically in both. fps is
+// always the fixed default (never user-configurable) — only resolution is
+// chosen per export, since picking a render size is the common need
+// (e.g. exporting the same project at 4K vs 1080p).
 export default function ExportButton({projectPath}: Props) {
+    const [showPicker, setShowPicker] = useState(false);
+    const [resolutionIndex, setResolutionIndex] = useState(0);
     const [busy, setBusy] = useState(false);
     const [status, setStatus] = useState('');
 
-    async function runExport() {
+    async function runExport(width: number, height: number) {
         setBusy(true);
         let scene: Scene | null = null;
         try {
@@ -35,18 +41,15 @@ export default function ExportButton({projectPath}: Props) {
             const info = await OpenProject(projectPath);
 
             setStatus('checking codec support…');
-            const supported = await canEncodeVideo('avc', {
-                width: info.width,
-                height: info.height,
-                frameRate: info.fps,
-            });
+            const supported = await canEncodeVideo('avc', {width, height, frameRate: info.fps});
             if (!supported) {
                 setStatus('WebCodecs H.264 ("avc") is not supported in this WebView2. Stopping per plan.');
                 return;
             }
 
+            const keyboard = await KeyboardAt(width);
             // no host: renders off-screen
-            scene = await Scene.create({width: info.width, height: info.height, keyboard: info.keyboard});
+            scene = await Scene.create({width, height, keyboard});
 
             const output = new Output({
                 format: new Mp4OutputFormat(),
@@ -88,7 +91,7 @@ export default function ExportButton({projectPath}: Props) {
             const frameCount = Math.max(1, Math.ceil(info.durationSeconds * info.fps));
             for (let frame = 0; frame < frameCount; frame++) {
                 const t = frame / info.fps;
-                const instances = await DrawListAt(t);
+                const instances = await DrawListAt(t, width, height);
                 scene.update(instances, t);
                 scene.renderFrame();
                 await videoSource.add(t, 1 / info.fps);
@@ -117,11 +120,30 @@ export default function ExportButton({projectPath}: Props) {
         }
     }
 
+    function startExport() {
+        setShowPicker(false);
+        const {width, height} = RESOLUTIONS[resolutionIndex];
+        void runExport(width, height);
+    }
+
     return (
         <span style={{display: 'inline-flex', alignItems: 'center', gap: 8}}>
-            <button disabled={busy} onClick={() => void runExport()}>
-                {busy ? 'Exporting…' : 'Export video'}
-            </button>
+            {!showPicker && (
+                <button disabled={busy} onClick={() => setShowPicker(true)}>
+                    {busy ? 'Exporting…' : 'Export video'}
+                </button>
+            )}
+            {showPicker && (
+                <>
+                    <select value={resolutionIndex} onChange={(e) => setResolutionIndex(Number(e.target.value))}>
+                        {RESOLUTIONS.map((r, i) => (
+                            <option key={r.label} value={i}>{r.label}</option>
+                        ))}
+                    </select>
+                    <button onClick={startExport}>Start</button>
+                    <button onClick={() => setShowPicker(false)}>Cancel</button>
+                </>
+            )}
             {status && <span>{status}</span>}
         </span>
     );

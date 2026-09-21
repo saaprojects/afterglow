@@ -9,10 +9,13 @@ import (
 	"afterglow/core/timeline"
 )
 
+const (
+	testWidth  = 880.0
+	testHeight = 1000.0
+)
+
 func testProject() *project.Project {
 	p := project.New("song.mid")
-	p.Resolution = project.Resolution{Width: 880, Height: 1000}
-	p.ScrollSpeed = 100 // 100 px/sec
 	p.Tracks = []project.TrackSettings{
 		{Track: 1, Hidden: true},
 	}
@@ -21,7 +24,7 @@ func testProject() *project.Project {
 
 func TestDrawList_EmptyWhenNoNotes(t *testing.T) {
 	tl := timeline.New(testProject(), nil)
-	if got := DrawList(tl, 0); got != nil {
+	if got := DrawList(tl, 0, testWidth, testHeight); got != nil {
 		t.Errorf("DrawList() = %v, want nil", got)
 	}
 }
@@ -31,13 +34,14 @@ func TestDrawList_NoteReachesHitLineAtStart(t *testing.T) {
 	notes := []midi.Note{{Start: 5, Duration: 1, Pitch: 21, Velocity: 127, Track: 0}} // A0: the first (white) key
 	tl := timeline.New(p, notes)
 
-	instances := DrawList(tl, 5) // t == note start
+	instances := DrawList(tl, 5, testWidth, testHeight) // t == note start
 	if len(instances) != 1 {
 		t.Fatalf("len(instances) = %d, want 1", len(instances))
 	}
 
-	hitLineY := float64(p.Resolution.Height) * HitLineFraction
-	wantH := 1.0 * p.ScrollSpeed
+	hitLineY := testHeight * HitLineFraction
+	scrollSpeed := hitLineY / LookaheadSeconds
+	wantH := 1.0 * scrollSpeed
 	got := instances[0]
 
 	if got.Y+got.H != hitLineY {
@@ -56,11 +60,11 @@ func TestDrawList_NoteReachesHitLineAtStart(t *testing.T) {
 
 func TestDrawList_NotYetVisible(t *testing.T) {
 	p := testProject()
-	// hit line at 850px, scroll speed 100px/s -> lookaheadUp = 8.5s
+	// lookahead is always exactly LookaheadSeconds, regardless of resolution.
 	notes := []midi.Note{{Start: 100, Duration: 1, Pitch: 60, Velocity: 100, Track: 0}}
 	tl := timeline.New(p, notes)
 
-	if got := DrawList(tl, 0); len(got) != 0 {
+	if got := DrawList(tl, 0, testWidth, testHeight); len(got) != 0 {
 		t.Errorf("DrawList() = %v, want empty (note starts far in the future)", got)
 	}
 }
@@ -70,7 +74,7 @@ func TestDrawList_AlreadyScrolledPast(t *testing.T) {
 	notes := []midi.Note{{Start: 0, Duration: 0.1, Pitch: 60, Velocity: 100, Track: 0}}
 	tl := timeline.New(p, notes)
 
-	if got := DrawList(tl, 1000); len(got) != 0 {
+	if got := DrawList(tl, 1000, testWidth, testHeight); len(got) != 0 {
 		t.Errorf("DrawList() = %v, want empty (note long finished)", got)
 	}
 }
@@ -80,7 +84,7 @@ func TestDrawList_HiddenTrackExcluded(t *testing.T) {
 	notes := []midi.Note{{Start: 5, Duration: 1, Pitch: 60, Velocity: 100, Track: 1}} // track 1 is hidden
 	tl := timeline.New(p, notes)
 
-	if got := DrawList(tl, 5); len(got) != 0 {
+	if got := DrawList(tl, 5, testWidth, testHeight); len(got) != 0 {
 		t.Errorf("DrawList() = %v, want empty (hidden track)", got)
 	}
 }
@@ -90,12 +94,12 @@ func TestDrawList_PitchOutOfRangeIsClamped(t *testing.T) {
 	notes := []midi.Note{{Start: 5, Duration: 1, Pitch: 127, Velocity: 100, Track: 0}}
 	tl := timeline.New(p, notes)
 
-	instances := DrawList(tl, 5)
+	instances := DrawList(tl, 5, testWidth, testHeight)
 	if len(instances) != 1 {
 		t.Fatalf("len(instances) = %d, want 1", len(instances))
 	}
 
-	keyboard := Keyboard(float64(p.Resolution.Width))
+	keyboard := Keyboard(testWidth)
 	topKey := keyboard[len(keyboard)-1] // C8, the highest key on an 88-key piano
 	if instances[0].X != topKey.X || instances[0].W != topKey.W {
 		t.Errorf("X,W = %v,%v, want %v,%v (clamped to top key C8)", instances[0].X, instances[0].W, topKey.X, topKey.W)
@@ -118,8 +122,8 @@ func TestDrawList_MatchesBruteForce(t *testing.T) {
 	tl := timeline.New(p, notes)
 
 	for _, sample := range []float64{-5, 0, 1, 2, 3, 5, 9, 10, 10.5, 20, 50, 60} {
-		got := DrawList(tl, sample)
-		want := bruteForceDrawList(tl, sample)
+		got := DrawList(tl, sample, testWidth, testHeight)
+		want := bruteForceDrawList(tl, sample, testWidth, testHeight)
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("t=%v: DrawList() = %+v, want %+v (brute force)", sample, got, want)
 		}
@@ -129,13 +133,13 @@ func TestDrawList_MatchesBruteForce(t *testing.T) {
 // bruteForceDrawList reimplements DrawList's visibility rule with a full
 // scan over every note, as an independent check on the binary-search
 // bounds used by the real implementation.
-func bruteForceDrawList(tl *timeline.Timeline, t float64) []Instance {
+func bruteForceDrawList(tl *timeline.Timeline, t, width, height float64) []Instance {
 	p := tl.Project
-	height := float64(p.Resolution.Height)
 	hitLineY := height * HitLineFraction
-	lookaheadUp := hitLineY / p.ScrollSpeed
-	trailingWindow := (height - hitLineY) / p.ScrollSpeed
-	keyboard := Keyboard(float64(p.Resolution.Width))
+	scrollSpeed := hitLineY / LookaheadSeconds
+	lookaheadUp := LookaheadSeconds
+	trailingWindow := (height - hitLineY) / scrollSpeed
+	keyboard := Keyboard(width)
 
 	var instances []Instance
 	for _, n := range tl.Notes {
@@ -152,8 +156,8 @@ func bruteForceDrawList(tl *timeline.Timeline, t float64) []Instance {
 		}
 
 		key := keyRectForPitch(keyboard, n.Pitch)
-		yBottom := hitLineY + (t-n.Start)*p.ScrollSpeed
-		h := n.Duration * p.ScrollSpeed
+		yBottom := hitLineY + (t-n.Start)*scrollSpeed
+		h := n.Duration * scrollSpeed
 
 		instances = append(instances, Instance{
 			X:     key.X,

@@ -32,13 +32,6 @@ type Project struct {
 	// (core/midi's Note.Track). Tracks without an entry fall back to
 	// DefaultColorForTrack and are not hidden.
 	Tracks []TrackSettings `json:"tracks,omitempty"`
-
-	// ScrollSpeed is how fast notes fall, in pixels per second at the
-	// project's Resolution.
-	ScrollSpeed float64 `json:"scrollSpeed"`
-
-	Resolution Resolution `json:"resolution"`
-	FPS        int        `json:"fps"`
 }
 
 // TrackSettings overrides rendering for a single MIDI track.
@@ -46,12 +39,6 @@ type TrackSettings struct {
 	Track  int    `json:"track"`
 	Color  string `json:"color"` // hex, e.g. "#3399ff"
 	Hidden bool   `json:"hidden,omitempty"`
-}
-
-// Resolution is an export/preview frame size in pixels.
-type Resolution struct {
-	Width  int `json:"width"`
-	Height int `json:"height"`
 }
 
 // defaultColors cycles for tracks with no explicit TrackSettings entry, so
@@ -73,11 +60,8 @@ func DefaultColorForTrack(track int) string {
 // New returns a Project with sensible defaults for the given MIDI file.
 func New(midiFile string) *Project {
 	return &Project{
-		Version:     CurrentVersion,
-		MIDIFile:    midiFile,
-		ScrollSpeed: 300,
-		Resolution:  Resolution{Width: 1920, Height: 1080},
-		FPS:         60,
+		Version:  CurrentVersion,
+		MIDIFile: midiFile,
 	}
 }
 
