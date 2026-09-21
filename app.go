@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"afterglow/core/drawlist"
 	"afterglow/core/timeline"
@@ -12,8 +13,9 @@ import (
 
 // App struct
 type App struct {
-	ctx      context.Context
-	timeline *timeline.Timeline
+	ctx             context.Context
+	timeline        *timeline.Timeline
+	projectFilePath string
 }
 
 // NewApp creates a new App application struct
@@ -34,23 +36,39 @@ type ProjectInfo struct {
 	Width           int     `json:"width"`
 	Height          int     `json:"height"`
 	FPS             int     `json:"fps"`
+	HasAudio        bool    `json:"hasAudio"`
 }
 
 // OpenProject loads the project file and its referenced MIDI file, and
-// becomes the source for subsequent DrawListAt calls.
+// becomes the source for subsequent DrawListAt and AudioBytes calls.
 func (a *App) OpenProject(path string) (ProjectInfo, error) {
 	tl, err := timeline.Load(path)
 	if err != nil {
 		return ProjectInfo{}, err
 	}
 	a.timeline = tl
+	a.projectFilePath = path
 
 	return ProjectInfo{
 		DurationSeconds: tl.Duration(),
 		Width:           tl.Project.Resolution.Width,
 		Height:          tl.Project.Resolution.Height,
 		FPS:             tl.Project.FPS,
+		HasAudio:        tl.Project.AudioFile != "",
 	}, nil
+}
+
+// AudioBytes returns the raw bytes of the current project's audio file
+// (always WAV). Errors if no project is open or it has no audio file.
+func (a *App) AudioBytes() ([]byte, error) {
+	if a.timeline == nil {
+		return nil, fmt.Errorf("no project open")
+	}
+	path := a.timeline.Project.ResolveAudioPath(a.projectFilePath)
+	if path == "" {
+		return nil, fmt.Errorf("project has no audio file")
+	}
+	return os.ReadFile(path)
 }
 
 // DrawListAt returns the instances to render at time t (seconds) for the
@@ -62,16 +80,22 @@ func (a *App) DrawListAt(t float64) ([]drawlist.Instance, error) {
 	return drawlist.DrawList(a.timeline, t), nil
 }
 
-// SaveExportedVideo writes exported video bytes into the project's gitignored
-// tmp/ folder for local inspection, returning the absolute path written.
-func (a *App) SaveExportedVideo(data []byte, filename string) (string, error) {
-	dir := "tmp"
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+// SaveVideoAs prompts the user for a destination and writes the exported
+// video bytes there. Returns "" (no error) if the user cancels.
+func (a *App) SaveVideoAs(data []byte, defaultFilename string) (string, error) {
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "Save exported video",
+		DefaultFilename: defaultFilename,
+		Filters: []runtime.FileFilter{
+			{DisplayName: "MP4 Video (*.mp4)", Pattern: "*.mp4"},
+		},
+	})
+	if err != nil || path == "" {
 		return "", err
 	}
-	path := filepath.Join(dir, filename)
+
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return "", err
 	}
-	return filepath.Abs(path)
+	return path, nil
 }

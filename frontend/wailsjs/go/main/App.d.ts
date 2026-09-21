@@ -3,8 +3,10 @@
 import {drawlist} from '../models';
 import {main} from '../models';
 
+export function AudioBytes():Promise<Array<number>>;
+
 export function DrawListAt(arg1:number):Promise<Array<drawlist.Instance>>;
 
 export function OpenProject(arg1:string):Promise<main.ProjectInfo>;
 
-export function SaveExportedVideo(arg1:Array<number>,arg2:string):Promise<string>;
+export function SaveVideoAs(arg1:Array<number>,arg2:string):Promise<string>;

@@ -32,6 +32,7 @@ export namespace main {
 	    width: number;
 	    height: number;
 	    fps: number;
+	    hasAudio: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ProjectInfo(source);
@@ -43,6 +44,7 @@ export namespace main {
 	        this.width = source["width"];
 	        this.height = source["height"];
 	        this.fps = source["fps"];
+	        this.hasAudio = source["hasAudio"];
 	    }
 	}
 
