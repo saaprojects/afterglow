@@ -15,18 +15,13 @@ type Instance struct {
 	X, Y, W, H float64
 	Color      string  // hex, from the note's track settings
 	Glow       float64 // 0..1, derived from note velocity
+	Pitch      uint8   // which key this note is on, for renderers that highlight keys
 }
 
 // HitLineFraction is where the hit line sits, as a fraction of frame
 // height measured from the top. A note's rectangle reaches the hit line
 // exactly at its start time and finishes crossing it at start+duration.
 const HitLineFraction = 0.85
-
-// keyboard range: a standard 88-key piano, A0 (21) to C8 (108).
-const (
-	lowestPitch = 21
-	numPitches  = 88
-)
 
 // DrawList returns the instances visible at time t (seconds) for every
 // unhidden note whose falling rectangle overlaps the frame.
@@ -60,7 +55,7 @@ func DrawList(tl *timeline.Timeline, t float64) []Instance {
 		return notes[i].Start > upperBoundStart
 	})
 
-	columnWidth := float64(p.Resolution.Width) / float64(numPitches)
+	keyboard := Keyboard(float64(p.Resolution.Width))
 
 	var instances []Instance
 	for _, n := range notes[lo:hi] {
@@ -73,29 +68,20 @@ func DrawList(tl *timeline.Timeline, t float64) []Instance {
 			continue
 		}
 
+		key := keyRectForPitch(keyboard, n.Pitch)
 		yBottom := hitLineY + (t-n.Start)*p.ScrollSpeed
 		h := n.Duration * p.ScrollSpeed
 
 		instances = append(instances, Instance{
-			X:     pitchX(n.Pitch, columnWidth),
+			X:     key.X,
 			Y:     yBottom - h,
-			W:     columnWidth,
+			W:     key.W,
 			H:     h,
 			Color: settings.Color,
 			Glow:  float64(n.Velocity) / 127,
+			Pitch: n.Pitch,
 		})
 	}
 
 	return instances
-}
-
-func pitchX(pitch uint8, columnWidth float64) float64 {
-	idx := int(pitch) - lowestPitch
-	if idx < 0 {
-		idx = 0
-	}
-	if idx >= numPitches {
-		idx = numPitches - 1
-	}
-	return float64(idx) * columnWidth
 }

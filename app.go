@@ -32,11 +32,12 @@ func (a *App) startup(ctx context.Context) {
 // ProjectInfo is what the frontend needs to know after opening a project:
 // enough to size the canvas and drive a play/pause timeline.
 type ProjectInfo struct {
-	DurationSeconds float64 `json:"durationSeconds"`
-	Width           int     `json:"width"`
-	Height          int     `json:"height"`
-	FPS             int     `json:"fps"`
-	HasAudio        bool    `json:"hasAudio"`
+	DurationSeconds float64            `json:"durationSeconds"`
+	Width           int                `json:"width"`
+	Height          int                `json:"height"`
+	FPS             int                `json:"fps"`
+	HasAudio        bool               `json:"hasAudio"`
+	Keyboard        []drawlist.KeyRect `json:"keyboard"`
 }
 
 // OpenProject loads the project file and its referenced MIDI file, and
@@ -55,6 +56,7 @@ func (a *App) OpenProject(path string) (ProjectInfo, error) {
 		Height:          tl.Project.Resolution.Height,
 		FPS:             tl.Project.FPS,
 		HasAudio:        tl.Project.AudioFile != "",
+		Keyboard:        drawlist.Keyboard(float64(tl.Project.Resolution.Width)),
 	}, nil
 }
 

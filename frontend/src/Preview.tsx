@@ -1,6 +1,6 @@
 import {type ChangeEvent, useEffect, useRef, useState} from 'react';
 import {AudioBytes, DrawListAt, OpenProject, OpenProjectDialog} from '../wailsjs/go/main/App';
-import {Scene} from './scene';
+import {KEY_FADE_SECONDS, Scene} from './scene';
 import ExportButton from './ExportButton';
 import {decodeWailsBytes} from './wailsBytes';
 
@@ -28,6 +28,7 @@ export default function Preview() {
     const timeRef = useRef(0);
     const durationRef = useRef(0);
     const hasAudioRef = useRef(false);
+    const sceneRef = useRef<Scene | null>(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -61,34 +62,55 @@ export default function Preview() {
                 audioRef.current.removeAttribute('src');
             }
 
-            scene = await Scene.create({width: info.width, height: info.height}, hostRef.current);
+            scene = await Scene.create(
+                {width: info.width, height: info.height, keyboard: info.keyboard},
+                hostRef.current,
+            );
             if (cancelled) {
                 scene.destroy();
                 return;
             }
+            sceneRef.current = scene;
+
+            // How much real time to keep advancing past the nominal end
+            // before actually stopping playback, so the last note(s) —
+            // which are, by definition, still "active" at t=duration —
+            // get to fade out through the normal t-based mechanism instead
+            // of freezing mid-note. Comfortably longer than the fade itself.
+            const END_GRACE_SECONDS = KEY_FADE_SECONDS + 0.2;
+            let endGraceRemaining: number | null = null;
 
             let inFlight = false;
             const tick = (ticker: {deltaMS: number}) => {
                 if (playingRef.current) {
                     if (hasAudioRef.current && audioRef.current) {
                         timeRef.current = audioRef.current.currentTime;
-                        if (audioRef.current.ended) {
-                            playingRef.current = false;
-                            setPlaying(false);
+                        if (audioRef.current.ended && endGraceRemaining === null) {
+                            endGraceRemaining = END_GRACE_SECONDS;
                         }
                     } else {
-                        timeRef.current = Math.min(timeRef.current + ticker.deltaMS / 1000, durationRef.current);
-                        if (timeRef.current >= durationRef.current) {
+                        timeRef.current += ticker.deltaMS / 1000;
+                        if (timeRef.current >= durationRef.current && endGraceRemaining === null) {
+                            endGraceRemaining = END_GRACE_SECONDS;
+                        }
+                    }
+
+                    if (endGraceRemaining !== null) {
+                        endGraceRemaining -= ticker.deltaMS / 1000;
+                        if (endGraceRemaining <= 0) {
                             playingRef.current = false;
                             setPlaying(false);
+                            scene?.clearKeyHighlights();
+                            endGraceRemaining = null;
                         }
                     }
                 }
                 if (!inFlight) {
                     inFlight = true;
-                    DrawListAt(timeRef.current)
+                    const sampledT = timeRef.current;
+                    DrawListAt(sampledT)
                         .then((instances) => {
-                            scene?.update(instances);
+                            scene?.update(instances, sampledT);
                             scene?.renderFrame();
                             inFlight = false;
                         })
@@ -100,7 +122,7 @@ export default function Preview() {
             scene.app.ticker.add(tick);
 
             const displayInterval = setInterval(() => {
-                setDisplayTime(timeRef.current);
+                setDisplayTime(Math.min(timeRef.current, durationRef.current));
             }, 100);
 
             setStatus(`ready (${audioStatus})`);
@@ -109,6 +131,7 @@ export default function Preview() {
                 clearInterval(displayInterval);
                 scene?.app.ticker.remove(tick);
                 scene?.destroy();
+                sceneRef.current = null;
                 if (audioURL) URL.revokeObjectURL(audioURL);
             };
         })().catch((e) => {
@@ -139,6 +162,9 @@ export default function Preview() {
                 audioRef.current.pause();
             }
         }
+        if (!next) {
+            sceneRef.current?.clearKeyHighlights();
+        }
     }
 
     const AUDIO_ERROR_NAMES: Record<number, string> = {
@@ -160,6 +186,7 @@ export default function Preview() {
         timeRef.current = t;
         setDisplayTime(t);
         if (audioRef.current) audioRef.current.currentTime = t;
+        sceneRef.current?.clearKeyHighlights(); // avoid stale fades from before the jump
     }
 
     async function openProjectDialog() {

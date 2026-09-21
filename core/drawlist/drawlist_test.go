@@ -11,8 +11,8 @@ import (
 
 func testProject() *project.Project {
 	p := project.New("song.mid")
-	p.Resolution = project.Resolution{Width: 880, Height: 1000} // 10px per key across 88 keys
-	p.ScrollSpeed = 100                                         // 100 px/sec
+	p.Resolution = project.Resolution{Width: 880, Height: 1000}
+	p.ScrollSpeed = 100 // 100 px/sec
 	p.Tracks = []project.TrackSettings{
 		{Track: 1, Hidden: true},
 	}
@@ -28,7 +28,7 @@ func TestDrawList_EmptyWhenNoNotes(t *testing.T) {
 
 func TestDrawList_NoteReachesHitLineAtStart(t *testing.T) {
 	p := testProject()
-	notes := []midi.Note{{Start: 5, Duration: 1, Pitch: 21, Velocity: 127, Track: 0}}
+	notes := []midi.Note{{Start: 5, Duration: 1, Pitch: 21, Velocity: 127, Track: 0}} // A0: the first (white) key
 	tl := timeline.New(p, notes)
 
 	instances := DrawList(tl, 5) // t == note start
@@ -47,7 +47,7 @@ func TestDrawList_NoteReachesHitLineAtStart(t *testing.T) {
 		t.Errorf("H = %v, want %v", got.H, wantH)
 	}
 	if got.X != 0 {
-		t.Errorf("X = %v, want 0 (lowest pitch)", got.X)
+		t.Errorf("X = %v, want 0 (A0 is the first white key)", got.X)
 	}
 	if got.Glow != 1.0 {
 		t.Errorf("Glow = %v, want 1.0 (velocity 127)", got.Glow)
@@ -95,10 +95,10 @@ func TestDrawList_PitchOutOfRangeIsClamped(t *testing.T) {
 		t.Fatalf("len(instances) = %d, want 1", len(instances))
 	}
 
-	columnWidth := float64(p.Resolution.Width) / float64(numPitches)
-	wantX := float64(numPitches-1) * columnWidth
-	if instances[0].X != wantX {
-		t.Errorf("X = %v, want %v (clamped to top key)", instances[0].X, wantX)
+	keyboard := Keyboard(float64(p.Resolution.Width))
+	topKey := keyboard[len(keyboard)-1] // C8, the highest key on an 88-key piano
+	if instances[0].X != topKey.X || instances[0].W != topKey.W {
+		t.Errorf("X,W = %v,%v, want %v,%v (clamped to top key C8)", instances[0].X, instances[0].W, topKey.X, topKey.W)
 	}
 }
 
@@ -135,7 +135,7 @@ func bruteForceDrawList(tl *timeline.Timeline, t float64) []Instance {
 	hitLineY := height * HitLineFraction
 	lookaheadUp := hitLineY / p.ScrollSpeed
 	trailingWindow := (height - hitLineY) / p.ScrollSpeed
-	columnWidth := float64(p.Resolution.Width) / float64(numPitches)
+	keyboard := Keyboard(float64(p.Resolution.Width))
 
 	var instances []Instance
 	for _, n := range tl.Notes {
@@ -151,16 +151,18 @@ func bruteForceDrawList(tl *timeline.Timeline, t float64) []Instance {
 			continue
 		}
 
+		key := keyRectForPitch(keyboard, n.Pitch)
 		yBottom := hitLineY + (t-n.Start)*p.ScrollSpeed
 		h := n.Duration * p.ScrollSpeed
 
 		instances = append(instances, Instance{
-			X:     pitchX(n.Pitch, columnWidth),
+			X:     key.X,
 			Y:     yBottom - h,
-			W:     columnWidth,
+			W:     key.W,
 			H:     h,
 			Color: settings.Color,
 			Glow:  float64(n.Velocity) / 127,
+			Pitch: n.Pitch,
 		})
 	}
 	return instances

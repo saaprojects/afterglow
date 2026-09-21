@@ -45,7 +45,8 @@ export default function ExportButton({projectPath}: Props) {
                 return;
             }
 
-            scene = await Scene.create({width: info.width, height: info.height}); // no host: renders off-screen
+            // no host: renders off-screen
+            scene = await Scene.create({width: info.width, height: info.height, keyboard: info.keyboard});
 
             const output = new Output({
                 format: new Mp4OutputFormat(),
@@ -88,7 +89,7 @@ export default function ExportButton({projectPath}: Props) {
             for (let frame = 0; frame < frameCount; frame++) {
                 const t = frame / info.fps;
                 const instances = await DrawListAt(t);
-                scene.update(instances);
+                scene.update(instances, t);
                 scene.renderFrame();
                 await videoSource.add(t, 1 / info.fps);
 
